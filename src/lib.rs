@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+pub mod blockchain;
+
 /// Represents a node in the DAG
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Node {
