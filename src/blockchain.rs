@@ -104,7 +104,7 @@ impl Account {
 /// BlockDAG - DAG-based blockchain
 pub struct BlockDAG {
     blocks: HashMap<String, Block>,
-    children: HashMap<String, HashSet<String>>, // Child block mapping
+    children_mapping: HashMap<String, HashSet<String>>, // Child block mapping
     accounts: HashMap<String, Account>,
     k: usize, // GHOSTDAG parameter, controls anticone size
 }
@@ -113,7 +113,7 @@ impl BlockDAG {
     pub fn new(k: usize) -> Self {
         let mut dag = Self {
             blocks: HashMap::new(),
-            children: HashMap::new(),
+            children_mapping: HashMap::new(),
             accounts: HashMap::new(),
             k,
         };
@@ -121,7 +121,7 @@ impl BlockDAG {
         // Add genesis block
         let genesis = Block::genesis();
         dag.blocks.insert("genesis".to_string(), genesis);
-        dag.children.insert("genesis".to_string(), HashSet::new());
+        dag.children_mapping.insert("genesis".to_string(), HashSet::new());
 
         dag
     }
@@ -150,12 +150,12 @@ impl BlockDAG {
 
         // Update parent blocks' children list
         for parent in &block.parent_hashes {
-            self.children.get_mut(parent).unwrap().insert(hash.clone());
+            self.children_mapping.get_mut(parent).unwrap().insert(hash.clone());
         }
 
         // Add block
         self.blocks.insert(hash.clone(), block);
-        self.children.insert(hash.clone(), HashSet::new());
+        self.children_mapping.insert(hash.clone(), HashSet::new());
 
         // Recalculate GHOSTDAG ordering
         self.update_ghostdag_ordering()?;
@@ -206,7 +206,7 @@ impl BlockDAG {
 
         // Collect all candidate blocks
         while let Some(current) = queue.pop_front() {
-            if let Some(children) = self.children.get(&current) {
+            if let Some(children) = self.children_mapping.get(&current) {
                 for child in children {
                     if !visited.contains(child) {
                         visited.insert(child.clone());
@@ -308,7 +308,7 @@ impl BlockDAG {
         let mut descendants = HashSet::new();
         let mut queue = VecDeque::new();
 
-        if let Some(children) = self.children.get(block_hash) {
+        if let Some(children) = self.children_mapping.get(block_hash) {
             for child in children {
                 queue.push_back(child.clone());
                 descendants.insert(child.clone());
@@ -316,7 +316,7 @@ impl BlockDAG {
         }
 
         while let Some(current) = queue.pop_front() {
-            if let Some(children) = self.children.get(&current) {
+            if let Some(children) = self.children_mapping.get(&current) {
                 for child in children {
                     if descendants.insert(child.clone()) {
                         queue.push_back(child.clone());
