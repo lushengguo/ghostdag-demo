@@ -1,4 +1,4 @@
-# dag-demo
+# ghostdag-demo
 
 A minimal Directed Acyclic Graph (DAG) protocol implementation in Rust, including a DAG-based blockchain demonstration using the GHOSTDAG protocol.
 
