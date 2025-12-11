@@ -118,7 +118,7 @@ impl Dag {
     /// Returns nodes in topological order (dependencies before dependents)
     pub fn topological_sort(&self) -> Result<Vec<Node>, String> {
         let mut in_degree: HashMap<String, usize> = HashMap::new();
-        
+
         // Initialize in-degree for all nodes
         for node_id in self.nodes.keys() {
             in_degree.insert(node_id.clone(), 0);
@@ -205,7 +205,7 @@ mod tests {
         let mut dag = Dag::new();
         let node1 = Node::new("A", "Node A");
         let node2 = Node::new("A", "Another Node A");
-        
+
         assert!(dag.add_node(node1).is_ok());
         assert!(dag.add_node(node2).is_err());
         assert_eq!(dag.node_count(), 1);
@@ -216,7 +216,7 @@ mod tests {
         let mut dag = Dag::new();
         dag.add_node(Node::new("A", "Node A")).unwrap();
         dag.add_node(Node::new("B", "Node B")).unwrap();
-        
+
         assert!(dag.add_edge("A", "B").is_ok());
         assert_eq!(dag.edge_count(), 1);
     }
@@ -225,7 +225,7 @@ mod tests {
     fn test_add_edge_nonexistent_nodes() {
         let mut dag = Dag::new();
         dag.add_node(Node::new("A", "Node A")).unwrap();
-        
+
         assert!(dag.add_edge("A", "B").is_err());
         assert!(dag.add_edge("C", "A").is_err());
     }
@@ -235,7 +235,7 @@ mod tests {
         let mut dag = Dag::new();
         dag.add_node(Node::new("A", "Node A")).unwrap();
         dag.add_node(Node::new("B", "Node B")).unwrap();
-        
+
         dag.add_edge("A", "B").unwrap();
         // This would create a cycle: A -> B -> A
         assert!(dag.add_edge("B", "A").is_err());
@@ -247,7 +247,7 @@ mod tests {
         dag.add_node(Node::new("A", "Node A")).unwrap();
         dag.add_node(Node::new("B", "Node B")).unwrap();
         dag.add_node(Node::new("C", "Node C")).unwrap();
-        
+
         dag.add_edge("A", "B").unwrap();
         dag.add_edge("B", "C").unwrap();
         // This would create a cycle: A -> B -> C -> A
@@ -260,20 +260,20 @@ mod tests {
         dag.add_node(Node::new("A", "Node A")).unwrap();
         dag.add_node(Node::new("B", "Node B")).unwrap();
         dag.add_node(Node::new("C", "Node C")).unwrap();
-        
+
         dag.add_edge("A", "B").unwrap();
         dag.add_edge("B", "C").unwrap();
-        
+
         let sorted = dag.topological_sort().unwrap();
         assert_eq!(sorted.len(), 3);
-        
+
         // A should come before B, B should come before C
         let positions: HashMap<String, usize> = sorted
             .iter()
             .enumerate()
             .map(|(i, node)| (node.id.clone(), i))
             .collect();
-        
+
         assert!(positions["A"] < positions["B"]);
         assert!(positions["B"] < positions["C"]);
     }
@@ -285,27 +285,27 @@ mod tests {
         dag.add_node(Node::new("B", "Node B")).unwrap();
         dag.add_node(Node::new("C", "Node C")).unwrap();
         dag.add_node(Node::new("D", "Node D")).unwrap();
-        
+
         // Diamond shape: A -> B -> D, A -> C -> D
         dag.add_edge("A", "B").unwrap();
         dag.add_edge("A", "C").unwrap();
         dag.add_edge("B", "D").unwrap();
         dag.add_edge("C", "D").unwrap();
-        
+
         let sorted = dag.topological_sort().unwrap();
         assert_eq!(sorted.len(), 4);
-        
+
         let positions: HashMap<String, usize> = sorted
             .iter()
             .enumerate()
             .map(|(i, node)| (node.id.clone(), i))
             .collect();
-        
+
         // A must come before all others
         assert!(positions["A"] < positions["B"]);
         assert!(positions["A"] < positions["C"]);
         assert!(positions["A"] < positions["D"]);
-        
+
         // B and C must come before D
         assert!(positions["B"] < positions["D"]);
         assert!(positions["C"] < positions["D"]);
@@ -322,7 +322,7 @@ mod tests {
     fn test_topological_sort_single_node() {
         let mut dag = Dag::new();
         dag.add_node(Node::new("A", "Node A")).unwrap();
-        
+
         let sorted = dag.topological_sort().unwrap();
         assert_eq!(sorted.len(), 1);
         assert_eq!(sorted[0].id, "A");
@@ -334,13 +334,13 @@ mod tests {
         dag.add_node(Node::new("A", "Node A")).unwrap();
         dag.add_node(Node::new("B", "Node B")).unwrap();
         dag.add_node(Node::new("C", "Node C")).unwrap();
-        
+
         dag.add_edge("A", "B").unwrap();
         dag.add_edge("A", "C").unwrap();
-        
+
         let children = dag.get_children("A").unwrap();
         assert_eq!(children.len(), 2);
-        
+
         let child_ids: HashSet<&str> = children.iter().map(|n| n.id.as_str()).collect();
         assert!(child_ids.contains("B"));
         assert!(child_ids.contains("C"));
@@ -350,7 +350,7 @@ mod tests {
     fn test_get_children_no_children() {
         let mut dag = Dag::new();
         dag.add_node(Node::new("A", "Node A")).unwrap();
-        
+
         let children = dag.get_children("A").unwrap();
         assert_eq!(children.len(), 0);
     }
@@ -360,7 +360,7 @@ mod tests {
         let mut dag = Dag::new();
         dag.add_node(Node::new("A", "Node A")).unwrap();
         dag.add_node(Node::new("B", "Node B")).unwrap();
-        
+
         let nodes = dag.get_nodes();
         assert_eq!(nodes.len(), 2);
     }
