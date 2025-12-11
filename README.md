@@ -135,6 +135,20 @@ The GHOSTDAG (Greedy Heaviest-Observed Sub-DAG) protocol is implemented with the
 - **Weight**: Cumulative count of blue blocks up to and including current block
 - **Anticone**: Set of blocks that are concurrent (neither ancestors nor descendants)
 
+### Implementation Notes vs. Formal GHOSTDAG Protocol
+
+This implementation captures the core spirit of GHOSTDAG by creating a deterministic total ordering in a DAG that allows for concurrent blocks. However, it simplifies certain aspects compared to the formal GHOSTDAG protocol (e.g., PHANTOM-GHOSTDAG) often discussed in research papers:
+
+#### What this implementation achieves:
+*   **Deterministic Total Ordering**: It successfully creates a unique, canonical ordering of blocks from a DAG structure.
+*   **Blue/Red Block Classification**: It correctly distinguishes between blocks that are part of the main chain (blue) and those that are not (red), based on an anticone parameter (`k`).
+*   **Reorganization Capability**: It demonstrates that the main chain can reorg (blue blocks can become red, and red blocks can become blue) when new, heavier branches are introduced.
+
+#### Where it deviates from the formal protocol:
+*   **Global Sort vs. Recursive Tip Selection**: This implementation performs a global topological sort of the entire DAG and rebuilds the blue set from scratch with every new block. The formal GHOSTDAG protocol uses a more efficient recursive parent selection algorithm that walks backward from new tips, focusing on local decisions rather than global recomputation.
+*   **"Heaviness" Definition**: The current "heaviness" is a simplified measure based on the number of descendants a branch has. A formal GHOSTDAG protocol typically leverages Proof-of-Work (PoW), where "heaviness" is defined by the cumulative PoW difficulty of the blue blocks, making it Sybil-resistant and more robust to attacks.
+*   **Missing PoW and Economic Incentives**: To be a real-world consensus mechanism, it lacks Proof-of-Work, transaction fees, and block rewards, which are crucial for network security and participant motivation.
+
 ## Testing
 
 Run all tests:

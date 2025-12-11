@@ -204,16 +204,17 @@ impl BlockDAG {
         }
 
         // Priority queue for topological sort
-        // Stores (parent_count, Reverse(timestamp), hash)
+        // Stores (descendant_count, Reverse(timestamp), hash)
         // Prioritizes:
-        // 1. More parents (higher complexity/merge blocks)
-        // 2. Earlier timestamp (Reverse(timestamp))
+        // 1. More descendants (heavier chain/more work)
+        // 2. Earlier timestamp (tie-breaker)
         let mut heap = BinaryHeap::new();
 
         // Initialize heap with blocks that have 0 in-degree (genesis)
         if let Some(genesis) = self.blocks.get("genesis") {
+            let descendant_count = self.get_descendants(&genesis.hash).len();
             heap.push((
-                genesis.parent_hashes.len(),
+                descendant_count,
                 Reverse(genesis.timestamp),
                 genesis.hash.clone(),
             ));
@@ -241,8 +242,9 @@ impl BlockDAG {
                         if *degree == 0 {
                             // All parents processed, add to heap
                             if let Some(child_block) = self.blocks.get(child_hash) {
+                                let descendant_count = self.get_descendants(child_hash).len();
                                 heap.push((
-                                    child_block.parent_hashes.len(),
+                                    descendant_count,
                                     Reverse(child_block.timestamp),
                                     child_hash.clone(),
                                 ));
@@ -768,5 +770,165 @@ mod tests {
         };
 
         assert_eq!(red_block.weight, 0, "Red block should have weight 0");
+    }
+
+    #[test]
+    fn test_ghostdag_wide_dag_with_k_limit() {
+        // Test a wide DAG with 5 concurrent blocks and k=3.
+        // With k=3, we expect genesis + the first 4 blocks (ordered by timestamp) to be blue.
+        // The 5th block (b5) should be red because its blue anticone will contain 4 blocks (b1, b2, b3, b4),
+        // which is greater than k.
+        let mut dag = BlockDAG::new(3);
+
+        let b1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![], 100);
+        let b2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![], 200);
+        let b3 = Block::new("b3".to_string(), vec!["genesis".to_string()], vec![], 300);
+        let b4 = Block::new("b4".to_string(), vec!["genesis".to_string()], vec![], 400);
+        let b5 = Block::new("b5".to_string(), vec!["genesis".to_string()], vec![], 500);
+
+        dag.add_block(b1).unwrap();
+        dag.add_block(b2).unwrap();
+        dag.add_block(b3).unwrap();
+        dag.add_block(b4).unwrap();
+        dag.add_block(b5).unwrap();
+
+        // b1, b2, b3, b4 should be blue
+        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue);
+        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue);
+        assert_eq!(dag.get_block("b3").unwrap().color, BlockColor::Blue);
+        assert_eq!(dag.get_block("b4").unwrap().color, BlockColor::Blue);
+
+        // b5 should be red
+        assert_eq!(dag.get_block("b5").unwrap().color, BlockColor::Red, "b5 should be red");
+
+        let blue_count = ["b1", "b2", "b3", "b4", "b5"]
+            .iter()
+            .filter(|h| dag.get_block(h).unwrap().color == BlockColor::Blue)
+            .count();
+
+        assert_eq!(blue_count, 4, "Expected 4 blue blocks with k=3, not counting genesis");
+    }
+
+    #[test]
+    fn test_ghostdag_red_block_becomes_blue() {
+        // This test illustrates a scenario where a block that was initially colored RED
+        // becomes BLUE after new blocks are added, triggering a re-organization.
+        let mut dag = BlockDAG::new(1); // k=1, low tolerance for parallel blue blocks
+
+        // 1. Initial State: Create a wide fork.
+        //
+        //        genesis
+        //        /  |  \
+        //      b1  b2  b3
+        //
+        // With k=1, and processing by timestamp (b1, b2, b3), we expect:
+        // - b1: blue (anticone of {} in blue set is 0 <= 1)
+        // - b2: blue (anticone of {b1} in blue set is 1 <= 1)
+        // - b3: red  (anticone of {b1, b2} in blue set is 2 > 1)
+        let b1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![], 100);
+        let b2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![], 200);
+        let b3 = Block::new("b3".to_string(), vec!["genesis".to_string()], vec![], 300);
+
+        dag.add_block(b1).unwrap();
+        dag.add_block(b2).unwrap();
+        dag.add_block(b3).unwrap();
+
+        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue, "Initial state: b1 should be blue");
+        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue, "Initial state: b2 should be blue");
+        assert_eq!(dag.get_block("b3").unwrap().color, BlockColor::Red, "Initial state: b3 should be red");
+
+        // 2. Intervention: Add a new block that builds on the red block b3, and also
+        //    on a blue block (b2). This merge block signals that the chain containing b3
+        //    is being actively worked on and is merging with the blue part of the DAG.
+        //
+        //        genesis
+        //        /  |  \
+        //      b1  b2--b3
+        //          |  /
+        //          b4
+        //
+        let b4 = Block::new("b4".to_string(), vec!["b2".to_string(), "b3".to_string()], vec![], 400);
+        dag.add_block(b4).unwrap();
+
+        // 3. Final State: Check colors again.
+        // For b3 to become blue, its evaluation during the topological sort must change.
+        // However, the sort order of b1, b2, and b3 is fixed by their timestamps.
+        // The new logic prioritizes descendant count. `b4` adds weight to the branch
+        // containing `b3`. Depending on the evaluation order, this can be enough
+        // to make `b3` blue.
+        assert_eq!(dag.get_block("b3").unwrap().color, BlockColor::Blue, "After merge: b3 should now become blue");
+        assert_eq!(dag.get_block("b4").unwrap().color, BlockColor::Blue, "After merge: b4 should be blue");
+    }
+
+    #[test]
+    fn test_ghostdag_reorg_blue_becomes_red() {
+        // This test demonstrates a blockchain "reorganization" (reorg).
+        // A reorg happens when new information causes the GHOSTDAG algorithm to
+        // re-evaluate the canonical chain. In this scenario, blocks that were
+        // once considered part of the main chain (blue) are kicked out (become red).
+        //
+        // This is triggered by introducing new blocks with *earlier timestamps* than
+        // existing ones, simulating the arrival of "late" blocks on the network.
+        let mut dag = BlockDAG::new(1); // k=1 is sensitive to forks.
+
+        // 1. Initial State: Add two blocks.
+        // With k=1, both b1 and b2 can be blue.
+        let b1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![], 200);
+        let b2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![], 300);
+        dag.add_block(b1).unwrap();
+        dag.add_block(b2).unwrap();
+
+        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue, "Before reorg: b1 should be blue");
+        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue, "Before reorg: b2 should be blue");
+
+        // 2. Trigger Reorg: Add two "late" blocks with earlier timestamps.
+        // The topological sort will now process c1 and c2 before b1 and b2.
+        let c1 = Block::new("c1".to_string(), vec!["genesis".to_string()], vec![], 50);
+        let c2 = Block::new("c2".to_string(), vec!["genesis".to_string()], vec![], 60);
+        dag.add_block(c1).unwrap();
+        dag.add_block(c2).unwrap();
+
+        // 3. Final State: Check colors again.
+        // - c1 is processed first, becomes blue.
+        // - c2 is processed, its blue anticone is {c1} (size 1 <= k), so it becomes blue.
+        // - Now, b1 is processed. Its blue anticone is {c1, c2} (size 2 > k). It becomes RED.
+        // - b2 is processed. Its blue anticone is also {c1, c2} (size 2 > k). It also becomes RED.
+        assert_eq!(dag.get_block("c1").unwrap().color, BlockColor::Blue, "After reorg: c1 should be blue");
+        assert_eq!(dag.get_block("c2").unwrap().color, BlockColor::Blue, "After reorg: c2 should be blue");
+        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Red, "After reorg: b1 should become red");
+        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Red, "After reorg: b2 should become red");
+    }
+
+    #[test]
+    fn test_reorg_by_heavier_chain_work() {
+        // This test demonstrates that the chain with more accumulated work (more blocks)
+        // will win a reorg, even if its first block has a later timestamp. This
+        // correctly models real-world consensus behavior.
+        let mut dag = BlockDAG::new(0); // k=0 forces a single blue chain.
+
+        // 1. Establish two competing branches.
+        // `a1` has an earlier timestamp, so it initially becomes blue.
+        // `b1` has a later timestamp, so it initially becomes red.
+        let a1 = Block{ hash: "a1".to_string(), parent_hashes: vec!["genesis".to_string()], transactions: vec![], timestamp: 100, height: 0, color: BlockColor::Blue, weight: 0 };
+        let b1 = Block{ hash: "b1".to_string(), parent_hashes: vec!["genesis".to_string()], transactions: vec![], timestamp: 200, height: 0, color: BlockColor::Blue, weight: 0 };
+        dag.add_block(a1.clone()).unwrap();
+        dag.add_block(b1.clone()).unwrap();
+
+        assert_eq!(dag.get_block("a1").unwrap().color, BlockColor::Blue, "Initial state: a1 should be blue");
+        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Red, "Initial state: b1 should be red");
+
+        // 2. Extend the red branch (Branch B) to make it longer/heavier than Branch A.
+        let b2 = Block::new("b2".to_string(), vec!["b1".to_string()], vec![], 300);
+        let b3 = Block::new("b3".to_string(), vec!["b2".to_string()], vec![], 400);
+        dag.add_block(b2).unwrap();
+        dag.add_block(b3).unwrap();
+
+        // 3. Final State: A reorg should occur.
+        // The new logic prioritizes descendant count. Branch B has more descendants
+        // than Branch A, so it should now be the main (blue) chain.
+        assert_eq!(dag.get_block("a1").unwrap().color, BlockColor::Red, "After reorg: a1 should become red");
+        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue, "After reorg: b1 should become blue");
+        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue, "After reorg: b2 should become blue");
+        assert_eq!(dag.get_block("b3").unwrap().color, BlockColor::Blue, "After reorg: b3 should become blue");
     }
 }
