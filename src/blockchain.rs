@@ -36,8 +36,8 @@ impl Transaction {
 /// Block color (GHOSTDAG protocol)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockColor {
-    Blue,  // On the main chain
-    Red,   // Not on the main chain
+    Blue, // On the main chain
+    Red,  // Not on the main chain
 }
 
 /// Block structure
@@ -53,7 +53,12 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(hash: String, parent_hashes: Vec<String>, transactions: Vec<Transaction>, timestamp: u64) -> Self {
+    pub fn new(
+        hash: String,
+        parent_hashes: Vec<String>,
+        transactions: Vec<Transaction>,
+        timestamp: u64,
+    ) -> Self {
         Self {
             hash,
             parent_hashes,
@@ -112,18 +117,19 @@ impl BlockDAG {
             accounts: HashMap::new(),
             k,
         };
-        
+
         // Add genesis block
         let genesis = Block::genesis();
         dag.blocks.insert("genesis".to_string(), genesis);
         dag.children.insert("genesis".to_string(), HashSet::new());
-        
+
         dag
     }
 
     /// Add account
     pub fn add_account(&mut self, address: String, balance: u64) {
-        self.accounts.insert(address.clone(), Account::new(address, balance));
+        self.accounts
+            .insert(address.clone(), Account::new(address, balance));
     }
 
     /// Get account
@@ -141,7 +147,7 @@ impl BlockDAG {
         }
 
         let hash = block.hash.clone();
-        
+
         // Add block
         self.blocks.insert(hash.clone(), block);
         self.children.insert(hash.clone(), HashSet::new());
@@ -162,7 +168,7 @@ impl BlockDAG {
     /// GHOSTDAG algorithm: calculate blue block set and ordering
     fn update_ghostdag_ordering(&mut self) -> Result<(), String> {
         let ordered_blocks = self.ghostdag_sort()?;
-        
+
         // Reset all block colors and weights
         for block in self.blocks.values_mut() {
             block.color = BlockColor::Red;
@@ -186,7 +192,7 @@ impl BlockDAG {
     fn ghostdag_sort(&self) -> Result<Vec<String>, String> {
         let mut blue_set = HashSet::new();
         let mut ordered = Vec::new();
-        
+
         // Start from genesis block
         blue_set.insert("genesis".to_string());
         ordered.push("genesis".to_string());
@@ -194,12 +200,12 @@ impl BlockDAG {
         // Get topological order of all blocks
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
-        
+
         queue.push_back("genesis".to_string());
         visited.insert("genesis".to_string());
 
         let mut candidates = Vec::new();
-        
+
         // Collect all candidate blocks
         while let Some(current) = queue.pop_front() {
             if let Some(children) = self.children.get(&current) {
@@ -217,11 +223,11 @@ impl BlockDAG {
         candidates.sort_by(|a, b| {
             let block_a = self.blocks.get(a).unwrap();
             let block_b = self.blocks.get(b).unwrap();
-            
+
             // First sort by parent block count (more parents means deeper)
             let depth_a = block_a.parent_hashes.len();
             let depth_b = block_b.parent_hashes.len();
-            
+
             if depth_a != depth_b {
                 depth_b.cmp(&depth_a)
             } else {
@@ -250,7 +256,8 @@ impl BlockDAG {
 
         // Check number of blue blocks in anticone
         let anticone = self.get_anticone(candidate, blue_set);
-        let blue_anticone_size = anticone.iter()
+        let blue_anticone_size = anticone
+            .iter()
             .filter(|hash| blue_set.contains(*hash))
             .count();
 
@@ -265,9 +272,7 @@ impl BlockDAG {
         let descendants = self.get_descendants(block_hash);
 
         for hash in reference_set {
-            if hash != block_hash 
-                && !ancestors.contains(hash) 
-                && !descendants.contains(hash) {
+            if hash != block_hash && !ancestors.contains(hash) && !descendants.contains(hash) {
                 anticone.insert(hash.clone());
             }
         }
@@ -327,10 +332,12 @@ impl BlockDAG {
 
     /// Get blue blocks ordered by weight
     pub fn get_ordered_blue_blocks(&self) -> Vec<&Block> {
-        let mut blue_blocks: Vec<&Block> = self.blocks.values()
+        let mut blue_blocks: Vec<&Block> = self
+            .blocks
+            .values()
             .filter(|b| b.color == BlockColor::Blue)
             .collect();
-        
+
         blue_blocks.sort_by_key(|b| b.weight);
         blue_blocks
     }
@@ -338,18 +345,26 @@ impl BlockDAG {
     /// Execute transaction
     fn execute_transaction(&mut self, tx: &mut Transaction) -> Result<(), String> {
         // Check sender account
-        let sender = self.accounts.get_mut(&tx.from)
+        let sender = self
+            .accounts
+            .get_mut(&tx.from)
             .ok_or_else(|| format!("Sender account '{}' does not exist", tx.from))?;
 
         // Verify nonce
         if tx.nonce != sender.nonce {
-            tx.status = TxStatus::Failed(format!("Invalid nonce: expected {}, got {}", sender.nonce, tx.nonce));
+            tx.status = TxStatus::Failed(format!(
+                "Invalid nonce: expected {}, got {}",
+                sender.nonce, tx.nonce
+            ));
             return Err(tx.status.clone().to_string());
         }
 
         // Verify balance
         if sender.balance < tx.amount {
-            tx.status = TxStatus::Failed(format!("Insufficient balance: has {}, needs {}", sender.balance, tx.amount));
+            tx.status = TxStatus::Failed(format!(
+                "Insufficient balance: has {}, needs {}",
+                sender.balance, tx.amount
+            ));
             return Err(tx.status.clone().to_string());
         }
 
@@ -362,7 +377,8 @@ impl BlockDAG {
             receiver.balance += tx.amount;
         } else {
             // If receiver doesn't exist, create new account
-            self.accounts.insert(tx.to.clone(), Account::new(tx.to.clone(), tx.amount));
+            self.accounts
+                .insert(tx.to.clone(), Account::new(tx.to.clone(), tx.amount));
         }
 
         tx.status = TxStatus::Executed;
@@ -429,7 +445,9 @@ impl BlockDAG {
     pub fn revert_block(&mut self, block_hash: &str) -> Result<(), String> {
         // Clone transaction list first
         let transactions = {
-            let block = self.blocks.get(block_hash)
+            let block = self
+                .blocks
+                .get(block_hash)
                 .ok_or_else(|| format!("Block '{}' does not exist", block_hash))?;
             block.transactions.clone()
         };
@@ -437,7 +455,7 @@ impl BlockDAG {
         // Execute transaction rollback in reverse order
         let tx_count = transactions.len();
         let mut reverted_txs = Vec::new();
-        
+
         for i in (0..tx_count).rev() {
             let mut tx = transactions[i].clone();
             self.revert_transaction(&mut tx)?;

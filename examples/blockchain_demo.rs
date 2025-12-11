@@ -10,7 +10,7 @@ fn main() {
     dag.add_account("alice".to_string(), 1000);
     dag.add_account("bob".to_string(), 500);
     dag.add_account("charlie".to_string(), 300);
-    
+
     println!("   Alice: 1000, Bob: 500, Charlie: 300\n");
 
     println!("2. Creating a DAG structure with parallel blocks:");
@@ -29,7 +29,12 @@ fn main() {
         100,
         0,
     );
-    let block1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![tx1], 100);
+    let block1 = Block::new(
+        "b1".to_string(),
+        vec!["genesis".to_string()],
+        vec![tx1],
+        100,
+    );
     dag.add_block(block1).unwrap();
 
     let tx2 = Transaction::new(
@@ -39,7 +44,12 @@ fn main() {
         50,
         0,
     );
-    let block2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![tx2], 101);
+    let block2 = Block::new(
+        "b2".to_string(),
+        vec!["genesis".to_string()],
+        vec![tx2],
+        101,
+    );
     dag.add_block(block2).unwrap();
 
     let tx3 = Transaction::new(
@@ -49,7 +59,12 @@ fn main() {
         30,
         0,
     );
-    let block3 = Block::new("b3".to_string(), vec!["genesis".to_string()], vec![tx3], 102);
+    let block3 = Block::new(
+        "b3".to_string(),
+        vec!["genesis".to_string()],
+        vec![tx3],
+        102,
+    );
     dag.add_block(block3).unwrap();
 
     // Create merge block
@@ -78,7 +93,10 @@ fn main() {
             BlockColor::Blue => "🔵 Blue",
             BlockColor::Red => "🔴 Red",
         };
-        println!("   Block {}: {} (weight: {})", block.hash, color, block.weight);
+        println!(
+            "   Block {}: {} (weight: {})",
+            block.hash, color, block.weight
+        );
     }
 
     println!("\n4. Ordered Blue Chain (by weight):");
@@ -102,8 +120,10 @@ fn main() {
                     TxStatus::Pending => "⧖ Pending",
                     TxStatus::Reverted => "↶ Reverted",
                 };
-                println!("     {} ({} -> {}, amount: {}): {}", 
-                    tx.id, tx.from, tx.to, tx.amount, status);
+                println!(
+                    "     {} ({} -> {}, amount: {}): {}",
+                    tx.id, tx.from, tx.to, tx.amount, status
+                );
             }
         }
     }
@@ -121,18 +141,18 @@ fn main() {
 
     println!("\n7. Demonstrating transaction revert:");
     println!("   Reverting block b1...");
-    
+
     let alice_before = dag.get_account("alice").unwrap().balance;
     let bob_before = dag.get_account("bob").unwrap().balance;
-    
+
     dag.revert_block("b1").unwrap();
-    
+
     let alice_after = dag.get_account("alice").unwrap().balance;
     let bob_after = dag.get_account("bob").unwrap().balance;
-    
+
     println!("   Alice: {} -> {}", alice_before, alice_after);
     println!("   Bob: {} -> {}", bob_before, bob_after);
-    
+
     let block = dag.get_block("b1").unwrap();
     for tx in &block.transactions {
         println!("   Transaction {} status: {:?}", tx.id, tx.status);
@@ -142,7 +162,7 @@ fn main() {
     let mut dag2 = BlockDAG::new(3);
     dag2.add_account("poor_alice".to_string(), 10);
     dag2.add_account("rich_bob".to_string(), 1000);
-    
+
     // 尝试转账超过余额的金额
     let tx_fail = Transaction::new(
         "tx_fail".to_string(),
@@ -151,25 +171,31 @@ fn main() {
         100,
         0,
     );
-    
+
     let block_fail = Block::new(
         "b_fail".to_string(),
         vec!["genesis".to_string()],
         vec![tx_fail],
         200,
     );
-    
+
     dag2.add_block(block_fail).unwrap();
     dag2.execute_blue_chain().unwrap();
-    
+
     let block = dag2.get_block("b_fail").unwrap();
     match &block.transactions[0].status {
         TxStatus::Failed(reason) => println!("   ✗ Transaction failed as expected: {}", reason),
         _ => println!("   Unexpected transaction status"),
     }
-    
-    println!("   Poor Alice still has: {}", dag2.get_account("poor_alice").unwrap().balance);
-    println!("   Rich Bob still has: {}", dag2.get_account("rich_bob").unwrap().balance);
+
+    println!(
+        "   Poor Alice still has: {}",
+        dag2.get_account("poor_alice").unwrap().balance
+    );
+    println!(
+        "   Rich Bob still has: {}",
+        dag2.get_account("rich_bob").unwrap().balance
+    );
 
     println!("\n=== Demo Complete ===");
 }
