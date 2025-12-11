@@ -148,16 +148,14 @@ impl BlockDAG {
 
         let hash = block.hash.clone();
 
+        // Update parent blocks' children list
+        for parent in &block.parent_hashes {
+            self.children.get_mut(parent).unwrap().insert(hash.clone());
+        }
+
         // Add block
         self.blocks.insert(hash.clone(), block);
         self.children.insert(hash.clone(), HashSet::new());
-
-        // Update parent blocks' children list
-        if let Some(blk) = self.blocks.get(&hash) {
-            for parent in &blk.parent_hashes {
-                self.children.get_mut(parent).unwrap().insert(hash.clone());
-            }
-        }
 
         // Recalculate GHOSTDAG ordering
         self.update_ghostdag_ordering()?;
