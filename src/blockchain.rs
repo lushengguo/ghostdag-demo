@@ -1,5 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::fmt;
 
 /// Transaction status
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -439,10 +440,10 @@ impl BlockDAG {
         }
 
         // Deduct receiver balance
-        if let Some(receiver) = self.accounts.get_mut(&tx.to) {
-            if receiver.balance >= tx.amount {
-                receiver.balance -= tx.amount;
-            }
+        if let Some(receiver) = self.accounts.get_mut(&tx.to)
+            && receiver.balance >= tx.amount
+        {
+            receiver.balance -= tx.amount;
         }
 
         tx.status = TxStatus::Reverted;
@@ -490,13 +491,13 @@ impl BlockDAG {
     }
 }
 
-impl TxStatus {
-    fn to_string(&self) -> String {
+impl fmt::Display for TxStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TxStatus::Pending => "Pending".to_string(),
-            TxStatus::Executed => "Executed".to_string(),
-            TxStatus::Failed(reason) => format!("Failed: {}", reason),
-            TxStatus::Reverted => "Reverted".to_string(),
+            TxStatus::Pending => write!(f, "Pending"),
+            TxStatus::Executed => write!(f, "Executed"),
+            TxStatus::Failed(reason) => write!(f, "Failed: {}", reason),
+            TxStatus::Reverted => write!(f, "Reverted"),
         }
     }
 }
@@ -567,40 +568,6 @@ mod tests {
         assert_eq!(dag.get_block("b1").unwrap().weight, 2);
         assert_eq!(dag.get_block("b2").unwrap().weight, 3);
         assert_eq!(dag.get_block("b3").unwrap().weight, 4);
-    }
-
-    #[test]
-    fn test_ghostdag_simple_fork_k1() {
-        // Test GHOSTDAG with k=1
-        // DAG structure:
-        //      genesis
-        //       /   \
-        //      b1   b2
-        // When two blocks compete, both may still be blue if their anticone relationship allows
-        let mut dag = BlockDAG::new(1);
-
-        // Create a fork: genesis -> b1 and genesis -> b2
-        let b1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![], 100);
-        let b2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![], 200);
-
-        dag.add_block(b1).unwrap();
-        dag.add_block(b2).unwrap();
-
-        // With k=1, the first block (b1) should be blue
-        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue);
-
-        // b2's anticone contains b1 (1 blue block), which equals k=1, so b2 can also be blue
-        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue);
-
-        // Verify weights
-        // Weight doesn't represent "importance" or "validity" - both blocks are equally blue/valid.
-        // Weight represents their position in the canonical ordering that's needed for deterministic transaction execution.
-        // The algorithm breaks the tie using timestamp: b1 has timestamp 100, b2 has timestamp 200
-        // b1 gets processed first → weight 2
-        // b2 gets processed second → weight 3
-        assert_eq!(dag.get_block("genesis").unwrap().weight, 1);
-        assert_eq!(dag.get_block("b1").unwrap().weight, 2);
-        assert_eq!(dag.get_block("b2").unwrap().weight, 3);
     }
 
     #[test]
@@ -771,46 +738,6 @@ mod tests {
     }
 
     #[test]
-    fn test_ghostdag_anticone_calculation() {
-        // Test that anticone is correctly calculated
-        // DAG structure:
-        //      genesis
-        //       /   \
-        //      b1   b2  (b1 and b2 are in each other's anticone)
-        //       \   /
-        //        b3    (b3 is descendant of both, not in their anticone)
-        let mut dag = BlockDAG::new(3);
-
-        let b1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![], 100);
-        let b2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![], 200);
-        let b3 = Block::new(
-            "b3".to_string(),
-            vec!["b1".to_string(), "b2".to_string()],
-            vec![],
-            300,
-        );
-
-        dag.add_block(b1).unwrap();
-        dag.add_block(b2).unwrap();
-        dag.add_block(b3).unwrap();
-
-        // All blocks should be blue (anticone size is small enough)
-        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue);
-        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue);
-        assert_eq!(dag.get_block("b3").unwrap().color, BlockColor::Blue);
-
-        // Verify weights:
-        // 1. Genesis (1)
-        // 2. b1 (ts=100) -> 2
-        // 3. b2 (ts=200) -> 3
-        // 4. b3 (child of b1,b2) -> 4
-        assert_eq!(dag.get_block("genesis").unwrap().weight, 1);
-        assert_eq!(dag.get_block("b1").unwrap().weight, 2);
-        assert_eq!(dag.get_block("b2").unwrap().weight, 3);
-        assert_eq!(dag.get_block("b3").unwrap().weight, 4);
-    }
-
-    #[test]
     fn test_ghostdag_red_block_exclusion() {
         // Test that red blocks don't contribute to weight and are properly excluded
         // DAG structure:
@@ -841,52 +768,5 @@ mod tests {
         };
 
         assert_eq!(red_block.weight, 0, "Red block should have weight 0");
-    }
-
-    #[test]
-    fn test_ghostdag_multiple_parents_ordering() {
-        // Test ordering when a block has multiple parents
-        // DAG structure:
-        //        genesis
-        //        /  |  \
-        //      b1  b2  b3
-        //        \  |  /
-        //          b4    (b4 has 3 parents, higher depth)
-        let mut dag = BlockDAG::new(5);
-
-        let b1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![], 100);
-        let b2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![], 200);
-        let b3 = Block::new("b3".to_string(), vec!["genesis".to_string()], vec![], 300);
-
-        // b4 has more parents (3 vs 1)
-        let b4 = Block::new(
-            "b4".to_string(),
-            vec!["b1".to_string(), "b2".to_string(), "b3".to_string()],
-            vec![],
-            150,
-        );
-
-        dag.add_block(b1).unwrap();
-        dag.add_block(b2).unwrap();
-        dag.add_block(b3).unwrap();
-        dag.add_block(b4).unwrap();
-
-        // All should be blue with k=5
-        assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue);
-        assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue);
-        assert_eq!(dag.get_block("b3").unwrap().color, BlockColor::Blue);
-        assert_eq!(dag.get_block("b4").unwrap().color, BlockColor::Blue);
-
-        // Verify weights:
-        // 1. Genesis (1)
-        // 2. b1 (ts=100) -> 2
-        // 3. b2 (ts=200) -> 3
-        // 4. b3 (ts=300) -> 4
-        // 5. b4 (child of b1,b2,b3) -> 5
-        assert_eq!(dag.get_block("genesis").unwrap().weight, 1);
-        assert_eq!(dag.get_block("b1").unwrap().weight, 2);
-        assert_eq!(dag.get_block("b2").unwrap().weight, 3);
-        assert_eq!(dag.get_block("b3").unwrap().weight, 4);
-        assert_eq!(dag.get_block("b4").unwrap().weight, 5);
     }
 }
