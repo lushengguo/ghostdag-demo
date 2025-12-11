@@ -628,6 +628,7 @@ mod tests {
         assert_eq!(dag.get_block("b1").unwrap().weight, 2);
         assert_eq!(dag.get_block("b2").unwrap().weight, 3);
     }
+
     #[test]
     fn test_ghostdag_complex_dag_with_k2() {
         // Test GHOSTDAG with a more complex DAG and k=2
@@ -682,6 +683,7 @@ mod tests {
         assert_eq!(dag.get_block("b3").unwrap().weight, 4);
         assert_eq!(dag.get_block("b4").unwrap().weight, 5);
     }
+
     #[test]
     fn test_ghostdag_weight_ordering() {
         // Test that weights are properly ordered in the blue chain
@@ -743,7 +745,7 @@ mod tests {
         // Test that earlier timestamp blocks are preferred when anticone size allows
         // DAG structure:
         //        genesis
-        //        /  |
+        //        /  |  \
         //      b2  b3  b1  (timestamps: b2=100, b3=300, b1=500)
         let mut dag = BlockDAG::new(5);
 
@@ -773,7 +775,7 @@ mod tests {
         // Test that anticone is correctly calculated
         // DAG structure:
         //      genesis
-        //       /
+        //       /   \
         //      b1   b2  (b1 and b2 are in each other's anticone)
         //       \   /
         //        b3    (b3 is descendant of both, not in their anticone)
@@ -813,7 +815,7 @@ mod tests {
         // Test that red blocks don't contribute to weight and are properly excluded
         // DAG structure:
         //      genesis
-        //       /
+        //       /   \
         //      b1   b2  (with k=0, only one can be blue)
         let mut dag = BlockDAG::new(0); // k=0 means only one chain can be blue
 
@@ -846,7 +848,7 @@ mod tests {
         // Test ordering when a block has multiple parents
         // DAG structure:
         //        genesis
-        //        /  |
+        //        /  |  \
         //      b1  b2  b3
         //        \  |  /
         //          b4    (b4 has 3 parents, higher depth)
