@@ -20,7 +20,7 @@ fn test_add_account() {
 fn test_single_block_chain() {
     let mut dag = BlockDAG::new(3);
 
-    // 添加区块
+    // add block
     let block1 = Block::new("block1".to_string(), vec!["genesis".to_string()], vec![], 1);
 
     dag.add_block(block1).unwrap();
@@ -34,11 +34,11 @@ fn test_single_block_chain() {
 fn test_transaction_execution_success() {
     let mut dag = BlockDAG::new(3);
 
-    // 设置账户
+    // set account
     dag.add_account("alice".to_string(), 1000);
     dag.add_account("bob".to_string(), 500);
 
-    // 创建交易
+    // create transaction
     let tx = Transaction::new(
         "tx1".to_string(),
         "alice".to_string(),
@@ -47,7 +47,7 @@ fn test_transaction_execution_success() {
         0,
     );
 
-    // 创建包含交易的区块
+    // create block containing the transaction
     let block1 = Block::new(
         "block1".to_string(),
         vec!["genesis".to_string()],
@@ -58,12 +58,12 @@ fn test_transaction_execution_success() {
     dag.add_block(block1).unwrap();
     dag.execute_blue_chain().unwrap();
 
-    // 验证余额
+    // Verify balance
     assert_eq!(dag.get_account("alice").unwrap().balance, 900);
     assert_eq!(dag.get_account("bob").unwrap().balance, 600);
     assert_eq!(dag.get_account("alice").unwrap().nonce, 1);
 
-    // 验证交易状态
+    // Verify transaction status
     let block = dag.get_block("block1").unwrap();
     assert_eq!(block.transactions[0].status, TxStatus::Executed);
 }
@@ -72,11 +72,11 @@ fn test_transaction_execution_success() {
 fn test_transaction_execution_insufficient_balance() {
     let mut dag = BlockDAG::new(3);
 
-    // 设置账户
+    // set account
     dag.add_account("alice".to_string(), 50);
     dag.add_account("bob".to_string(), 500);
 
-    // 创建交易（余额不足）
+    // create transaction (insufficient balance)
     let tx = Transaction::new(
         "tx1".to_string(),
         "alice".to_string(),
@@ -95,11 +95,11 @@ fn test_transaction_execution_insufficient_balance() {
     dag.add_block(block1).unwrap();
     dag.execute_blue_chain().unwrap();
 
-    // 验证余额未改变
+    // Verify balance unchanged
     assert_eq!(dag.get_account("alice").unwrap().balance, 50);
     assert_eq!(dag.get_account("bob").unwrap().balance, 500);
 
-    // 验证交易失败
+    // Verify transaction failed
     let block = dag.get_block("block1").unwrap();
     match &block.transactions[0].status {
         TxStatus::Failed(reason) => assert!(reason.contains("Insufficient balance")),
@@ -114,13 +114,13 @@ fn test_transaction_execution_invalid_nonce() {
     dag.add_account("alice".to_string(), 1000);
     dag.add_account("bob".to_string(), 500);
 
-    // 创建交易（错误的 nonce）
+    // create transaction (wrong nonce)
     let tx = Transaction::new(
         "tx1".to_string(),
         "alice".to_string(),
         "bob".to_string(),
         100,
-        5, // 应该是 0
+        5, // should be 0
     );
 
     let block1 = Block::new(
@@ -133,7 +133,7 @@ fn test_transaction_execution_invalid_nonce() {
     dag.add_block(block1).unwrap();
     dag.execute_blue_chain().unwrap();
 
-    // 验证交易失败
+    // Verify transaction failed
     let block = dag.get_block("block1").unwrap();
     match &block.transactions[0].status {
         TxStatus::Failed(reason) => assert!(reason.contains("Invalid nonce")),
@@ -145,11 +145,11 @@ fn test_transaction_execution_invalid_nonce() {
 fn test_transaction_revert() {
     let mut dag = BlockDAG::new(3);
 
-    // 设置账户
+    // set account
     dag.add_account("alice".to_string(), 1000);
     dag.add_account("bob".to_string(), 500);
 
-    // 创建并执行交易
+    // Create and execute transaction
     let tx = Transaction::new(
         "tx1".to_string(),
         "alice".to_string(),
@@ -168,20 +168,20 @@ fn test_transaction_revert() {
     dag.add_block(block1).unwrap();
     dag.execute_blue_chain().unwrap();
 
-    // 验证执行后的状态
+    // Verify state after execution
     assert_eq!(dag.get_account("alice").unwrap().balance, 900);
     assert_eq!(dag.get_account("bob").unwrap().balance, 600);
     assert_eq!(dag.get_account("alice").unwrap().nonce, 1);
 
-    // 回滚交易
+    // Revert transaction
     dag.revert_block("block1").unwrap();
 
-    // 验证回滚后的状态
+    // Verify state after revert
     assert_eq!(dag.get_account("alice").unwrap().balance, 1000);
     assert_eq!(dag.get_account("bob").unwrap().balance, 500);
     assert_eq!(dag.get_account("alice").unwrap().nonce, 0);
 
-    // 验证交易状态
+    // Verify transaction status
     let block = dag.get_block("block1").unwrap();
     assert_eq!(block.transactions[0].status, TxStatus::Reverted);
 }
@@ -190,7 +190,7 @@ fn test_transaction_revert() {
 fn test_ghostdag_blue_red_blocks() {
     let mut dag = BlockDAG::new(2);
 
-    // 创建一个分叉的 DAG
+    // Create a forked DAG
     //        genesis
     //        /  |  \
     //      b1  b2  b3
@@ -205,8 +205,8 @@ fn test_ghostdag_blue_red_blocks() {
     dag.add_block(block2).unwrap();
     dag.add_block(block3).unwrap();
 
-    // b1 和 b2 应该是蓝色（k=2 允许 2 个反锥体中的蓝色区块）
-    // b3 可能是红色，取决于反锥体大小
+    // b1 and b2 should be blue (k=2 allows 2 blue blocks in anticone)
+    // b3 may be red, depending on anticone size
 
     let block4 = Block::new(
         "b4".to_string(),
@@ -216,11 +216,11 @@ fn test_ghostdag_blue_red_blocks() {
     );
     dag.add_block(block4).unwrap();
 
-    // 验证蓝色区块链
+    // Verify blue blockchain
     let blue_blocks = dag.get_ordered_blue_blocks();
-    assert!(blue_blocks.len() >= 2); // 至少有 genesis 和一些蓝色区块
+    assert!(blue_blocks.len() >= 2); // At least genesis and some blue blocks
 
-    // 验证权重递增
+    // Verify weight increasing
     for i in 1..blue_blocks.len() {
         assert!(blue_blocks[i].weight > blue_blocks[i - 1].weight);
     }
@@ -230,12 +230,12 @@ fn test_ghostdag_blue_red_blocks() {
 fn test_complex_dag_with_transactions() {
     let mut dag = BlockDAG::new(3);
 
-    // 设置账户
+    // set account
     dag.add_account("alice".to_string(), 1000);
     dag.add_account("bob".to_string(), 500);
     dag.add_account("charlie".to_string(), 300);
 
-    // 创建包含交易的区块链
+    // Create blockchain with transactions
     let tx1 = Transaction::new(
         "tx1".to_string(),
         "alice".to_string(),
@@ -256,14 +256,14 @@ fn test_complex_dag_with_transactions() {
     let block2 = Block::new("b2".to_string(), vec!["b1".to_string()], vec![tx2], 2);
     dag.add_block(block2).unwrap();
 
-    // 执行蓝色链
+    // Execute blue chain
     dag.execute_blue_chain().unwrap();
 
-    // 验证最终余额
+    // Verify final balance
     assert_eq!(dag.get_account("alice").unwrap().balance, 900);
     assert_eq!(dag.get_account("charlie").unwrap().balance, 350);
 
-    // Bob 的余额：500 + 100 - 50 = 550
+    // Bob's balance: 500 + 100 - 50 = 550
     assert_eq!(dag.get_account("bob").unwrap().balance, 550);
 }
 
@@ -271,7 +271,7 @@ fn test_complex_dag_with_transactions() {
 fn test_parallel_blocks_ordering() {
     let mut dag = BlockDAG::new(5);
 
-    // 创建并行区块（分叉）
+    // Create parallel blocks (fork)
     let block1 = Block::new("b1".to_string(), vec!["genesis".to_string()], vec![], 100);
     let block2 = Block::new("b2".to_string(), vec!["genesis".to_string()], vec![], 101);
     let block3 = Block::new("b3".to_string(), vec!["genesis".to_string()], vec![], 102);
@@ -280,16 +280,16 @@ fn test_parallel_blocks_ordering() {
     dag.add_block(block2).unwrap();
     dag.add_block(block3).unwrap();
 
-    // 所有区块都应该是蓝色（k=5 足够大）
+    // All blocks should be blue (k=5 is large enough)
     assert_eq!(dag.get_block("b1").unwrap().color, BlockColor::Blue);
     assert_eq!(dag.get_block("b2").unwrap().color, BlockColor::Blue);
     assert_eq!(dag.get_block("b3").unwrap().color, BlockColor::Blue);
 
-    // 验证权重排序
+    // Verify weight ordering
     let blue_blocks = dag.get_ordered_blue_blocks();
     let weights: Vec<u64> = blue_blocks.iter().map(|b| b.weight).collect();
 
-    // 权重应该是递增的
+    // Weights should be increasing
     for i in 1..weights.len() {
         assert!(weights[i] > weights[i - 1]);
     }
@@ -299,11 +299,11 @@ fn test_parallel_blocks_ordering() {
 fn test_multiple_transaction_revert_in_order() {
     let mut dag = BlockDAG::new(3);
 
-    // 设置账户
+    // set account
     dag.add_account("alice".to_string(), 1000);
     dag.add_account("bob".to_string(), 0);
 
-    // 创建多笔交易的区块
+    // Create block with multiple transactions
     let tx1 = Transaction::new(
         "tx1".to_string(),
         "alice".to_string(),
@@ -336,20 +336,20 @@ fn test_multiple_transaction_revert_in_order() {
     dag.add_block(block1).unwrap();
     dag.execute_blue_chain().unwrap();
 
-    // 验证执行后状态
+    // Verify state after execution
     assert_eq!(dag.get_account("alice").unwrap().balance, 400); // 1000 - 100 - 200 - 300
     assert_eq!(dag.get_account("bob").unwrap().balance, 600); // 0 + 100 + 200 + 300
     assert_eq!(dag.get_account("alice").unwrap().nonce, 3);
 
-    // 回滚整个区块
+    // Revert entire block
     dag.revert_block("b1").unwrap();
 
-    // 验证回滚后状态
+    // Verify state after revert
     assert_eq!(dag.get_account("alice").unwrap().balance, 1000);
     assert_eq!(dag.get_account("bob").unwrap().balance, 0);
     assert_eq!(dag.get_account("alice").unwrap().nonce, 0);
 
-    // 验证所有交易都被回滚
+    // Verify all transactions reverted
     let block = dag.get_block("b1").unwrap();
     for tx in &block.transactions {
         assert_eq!(tx.status, TxStatus::Reverted);

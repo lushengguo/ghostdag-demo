@@ -108,7 +108,7 @@ fn main() {
     println!("\n5. Executing transactions in blue chain order:");
     dag.execute_blue_chain().unwrap();
 
-    // 重新获取蓝色区块以显示交易执行状态
+    // request blue blocks again to show transaction status
     let blue_blocks = dag.get_ordered_blue_blocks();
     for block in blue_blocks {
         if !block.transactions.is_empty() {
@@ -163,7 +163,7 @@ fn main() {
     dag2.add_account("poor_alice".to_string(), 10);
     dag2.add_account("rich_bob".to_string(), 1000);
 
-    // 尝试转账超过余额的金额
+    // try transfer tokens exceed balance
     let tx_fail = Transaction::new(
         "tx_fail".to_string(),
         "poor_alice".to_string(),
